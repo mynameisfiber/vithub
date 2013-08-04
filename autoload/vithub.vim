@@ -19,6 +19,9 @@ if v:version < '703'"{{{
     finish
 endif"}}}
 
+if !exists('g:vithub_authed_requests')"{{{
+    let g:vithub_authed_requests = 1
+endif"}}}
 if !exists('g:vithub_width')"{{{
     let g:vithub_width = 45
 endif"}}}

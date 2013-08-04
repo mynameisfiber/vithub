@@ -20,6 +20,7 @@ import sys
 import vim
 
 GITHUB_BASE = "https://api.github.com/"
+GITHUB_ACCESS_TOKEN = None
 remotes = None
 
 class Remote(object):
@@ -41,21 +42,34 @@ class Remote(object):
 
     @classmethod
     def preview_pull_request(cls, pull_request, width=45):
-        result = [
-            str(pull_request["head"]["label"]),
-            "",
-        ] + str(pull_request["body"]).splitlines()
-        return result
+        if pull_request:
+            return [
+                str(pull_request["head"]["label"]),
+                "",
+            ] + str(pull_request["body"]).splitlines()
+        return []
 
-    def update_pull_requests(self):
+    def _fetch_pull_requests(self, page=1):
+        global GITHUB_ACCESS_TOKEN
         url = urlparse.urljoin(GITHUB_BASE, "/repos/%s/%s/pulls" % (self.user, self.repo))
+        params = {"page" : page}
+        if GITHUB_ACCESS_TOKEN:
+            params["access_token"] = GITHUB_ACCESS_TOKEN
+        url += "?" + urllib.urlencode(params)
+    
         try:
-            data_raw = urllib.urlopen(url).read()
+            fd = urllib.urlopen(url)
         except:
             # error handling?
             return None
+        data = json.loads(fd.read())
+        link_header = fd.headers.get("Link")
+        if link_header and 'rel="next"' in link_header:
+            data += self._fetch_pull_requests(page+1)
+        return data
 
-        self.pull_requests = json.loads(data_raw)
+    def update_pull_requests(self):
+        self.pull_requests = self._fetch_pull_requests()
 
     def show(self):
         result = []
@@ -159,6 +173,9 @@ def VithubRenderGraph():
 
 def GetCurrentState():
     global remotes
+    if not remotes:
+        return None, None
+
     target_state = int(vim.eval('s:VithubGetTargetState()'))
     if int(vim.eval('g:vithub_help')):
         target_state -= len(INLINE_HELP.splitlines())
@@ -171,13 +188,11 @@ def GetCurrentState():
             target_state -= 1
             if not target_state:
                 return remote, pull
+    return None, None
 
 def VithubRenderPreview():
     global remotes
     remote, pull = GetCurrentState()
-
-    if pull is None:
-        return
 
     _goto_window_for_buffer(vim.eval('g:vithub_target_n'))
 
@@ -194,9 +209,6 @@ def VithubRenderChangePreview():
         return
     remote, pull = GetCurrentState()
 
-    if pull is None:
-        return
-
     _goto_window_for_buffer(vim.eval('g:vithub_target_n'))
 
     vim.command('call s:VithubOpenPreview()')
@@ -207,5 +219,13 @@ def VithubRenderChangePreview():
     _goto_window_for_buffer_name('__Vithub__')
 
 def initPythonModule():
+    global GITHUB_ACCESS_TOKEN
     if sys.version_info[:2] < (2, 4):
         vim.command('let s:has_supported_python = 0')
+    authed_requests = int(vim.eval('g:vithub_authed_requests'))
+    if authed_requests:
+        token = os.popen("git config --get github.token", "r").read().strip()
+        GITHUB_ACCESS_TOKEN = token or None
+
+    
+
