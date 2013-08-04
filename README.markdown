@@ -7,6 +7,11 @@ Requirements
 * Python support for Vim
 * Python 2.4+
 
+Screenshot
+----------
+
+![](https://raw.github.com/mynameisfiber/vithub/gh-pages/images/vithub.png)
+
 License
 -------
 
